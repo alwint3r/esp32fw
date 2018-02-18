@@ -1,3 +1,2 @@
 *.bin
 bin/
-cmd/esp32fw
