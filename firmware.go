@@ -51,7 +51,16 @@ func (f *Firmware) SetRecipes(recipes []FirmwareRecipe) error {
 
 // Build build the firmware from recipes
 func (f *Firmware) Build() error {
+	var fatalError error
+	defer func() {
+		if fatalError != nil {
+			os.Remove(f.outputPath)
+		}
+	}()
+
 	file, err := os.Create(f.outputPath)
+	defer file.Close()
+
 	if err != nil {
 		return err
 	}
@@ -63,7 +72,8 @@ func (f *Firmware) Build() error {
 	currentOffset = 0x1000
 	for _, recipe := range f.recipes {
 		if recipe.Offset < currentOffset {
-			return errors.New("offset does not match")
+			fatalError = errors.New("offset does not match")
+			return fatalError
 		}
 
 		padWith(file, 0xFF, recipe.Offset-currentOffset)
@@ -71,8 +81,10 @@ func (f *Firmware) Build() error {
 
 		recipeFile, err := os.Open(recipe.Path)
 		reader = bufio.NewReader(recipeFile)
+		defer recipeFile.Close()
 
 		if err != nil {
+			fatalError = err
 			return err
 		}
 
@@ -80,6 +92,7 @@ func (f *Firmware) Build() error {
 		readLength, err = writeToBuffer(&f.buffer, reader)
 
 		if err != nil {
+			fatalError = err
 			return err
 		}
 
@@ -87,6 +100,7 @@ func (f *Firmware) Build() error {
 		_, err = file.Write(f.buffer.Bytes())
 
 		if err != nil {
+			fatalError = err
 			return err
 		}
 	}

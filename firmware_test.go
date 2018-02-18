@@ -71,4 +71,51 @@ func TestFirmwareCreation(t *testing.T) {
 	if err != nil {
 		t.Error("Firmware is not created!")
 	}
+
+	os.Remove(outputPath)
+}
+
+func TestFirmwareCreationErrorHandling(t *testing.T) {
+	firmware := Firmware{}
+	workingDir, err := os.Getwd()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	outputPath := filepath.Join(workingDir, "test_files/output.bin")
+	recipes := []FirmwareRecipe{
+		FirmwareRecipe{
+			Offset: 0x1000,
+			Path:   filepath.Join(workingDir, "test_files/bootloader.bin"),
+		},
+		FirmwareRecipe{
+			Offset: 0x8000,
+			Path:   filepath.Join(workingDir, "test_files/partitions.bin"),
+		},
+		FirmwareRecipe{
+			Offset: 0x10000,
+			Path:   filepath.Join(workingDir, "test_files/maine.bin"),
+		},
+	}
+
+	err = firmware.SetOutputPath(outputPath)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = firmware.SetRecipes(recipes)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = firmware.Build()
+	if err == nil {
+		t.Error("Should throw an error")
+	}
+
+	_, err = os.Open(outputPath)
+	if err == nil {
+		t.Error("Firmware should not be created!")
+	}
 }
