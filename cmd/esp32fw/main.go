@@ -10,6 +10,10 @@ import (
 
 func main() {
 	projectDir := flag.String("project", "", "Path to ESP-IDF project")
+	isUsingArduino := flag.Bool("use-arduino", false, "Set this flag if you're using arduino as component to ESP-IDF project")
+	arduinoDirectoryName := flag.String("arduino-dir", "arduino-esp32", "Directory name of the arduino ESP32 component")
+	outputPathOption := flag.String("output-path", "", "Path to firmware output")
+
 	flag.Parse()
 
 	if len(*projectDir) < 1 {
@@ -28,7 +32,21 @@ func main() {
 	}
 
 	projectName := filepath.Base(*projectDir)
-	recipes, err := getIdfOnlyRecipes(projectName, *projectDir)
+
+	var actualOutputPath string
+	if len(*outputPathOption) < 1 || *outputPathOption == "." {
+		actualOutputPath = filepath.Join(cwd, projectName+".bin")
+	} else {
+		actualOutputPath = *outputPathOption
+	}
+
+	var recipes []esp32fw.FirmwareRecipe
+	if *isUsingArduino == true {
+		fmt.Println("This project is using Arduino as component")
+		recipes, err = getArduinoRecipes(projectName, *arduinoDirectoryName, *projectDir)
+	} else {
+		recipes, err = getIdfOnlyRecipes(projectName, *projectDir)
+	}
 
 	if err != nil {
 		fmt.Println("Failed getting recipes:", err)
@@ -36,7 +54,7 @@ func main() {
 	}
 
 	firmware := esp32fw.Firmware{}
-	firmware.SetOutputPath(filepath.Join(cwd, "firmware.bin"))
+	firmware.SetOutputPath(actualOutputPath)
 	firmware.SetRecipes(recipes)
 
 	err = firmware.Build()
@@ -44,4 +62,6 @@ func main() {
 		fmt.Println("Failed building firmware:", err)
 		os.Exit(1)
 	}
+
+	fmt.Printf("Saved firmware to %s\n", actualOutputPath)
 }

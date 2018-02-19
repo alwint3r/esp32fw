@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-func padWith(buffer io.Writer, item byte, length uint) error {
+func fillWith(buffer io.Writer, item byte, length uint) error {
 	bytes := make([]byte, length)
 	var i uint
 

@@ -64,3 +64,39 @@ func getIdfOnlyRecipes(projectName, projectDirectory string) ([]esp32fw.Firmware
 
 	return recipes, nil
 }
+
+func getArduinoRecipes(projectName, arduinoDirectory, projectDirectory string) ([]esp32fw.FirmwareRecipe, error) {
+	recipes := make([]esp32fw.FirmwareRecipe, 4)
+	defaultFilePath := filepath.Join(projectDirectory, "build", "default.bin")
+	
+	var partitionName string
+	_, err := os.Stat(defaultFilePath);
+	if err != nil {
+		partitionName = "partitions.bin"
+
+	} else {
+		partitionName = "default.bin"
+	}
+
+	recipes[0] = esp32fw.FirmwareRecipe{
+		Path:   filepath.Join(projectDirectory, "build/bootloader/bootloader.bin"),
+		Offset: 0x1000,
+	}
+
+	recipes[1] = esp32fw.FirmwareRecipe{
+		Path:   filepath.Join(projectDirectory, "build", partitionName),
+		Offset: 0x8000,
+	}
+
+	recipes[2] = esp32fw.FirmwareRecipe{
+		Path: filepath.Join(projectDirectory, "components", arduinoDirectory, "tools/partitions/boot_app0.bin"),
+		Offset: 0xe000,
+	}
+
+	recipes[3] = esp32fw.FirmwareRecipe{
+		Path:   filepath.Join(projectDirectory, "build", projectName+".bin"),
+		Offset: 0x10000,
+	}
+
+	return recipes, nil
+}

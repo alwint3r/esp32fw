@@ -76,7 +76,7 @@ func (f *Firmware) Build() error {
 			return fatalError
 		}
 
-		padWith(file, 0xFF, recipe.Offset-currentOffset)
+		fillWith(file, 0xFF, recipe.Offset-currentOffset)
 		currentOffset = recipe.Offset
 
 		recipeFile, err := os.Open(recipe.Path)
