@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"encoding/csv"
+	"strconv"
+	"errors"
 )
 
 func getPartitionTableName(projectDirectory string) (string, error) {
@@ -28,7 +31,7 @@ func getPartitionTableName(projectDirectory string) (string, error) {
 			partitionName = strings.Replace(splitted[1], "\"", "", -1)
 			splittedPartitionName := strings.Split(partitionName, ".")
 
-			return splittedPartitionName[0]+".bin", nil
+			return splittedPartitionName[0], nil
 		}
 
 		if err == io.EOF {
@@ -39,6 +42,52 @@ func getPartitionTableName(projectDirectory string) (string, error) {
 	}
 }
 
+func getFactoryAppOffset(projectDir, partitionFilename string) (uint, error) {
+	partitionFile := filepath.Join(projectDir, partitionFilename+".csv")
+	_, err := os.Stat(partitionFile)
+
+	if err != nil {
+		return 0, err
+	}
+
+	openedFile, err := os.Open(partitionFile)
+	if err != nil {
+		return 0, err
+	}
+
+	reader := csv.NewReader(bufio.NewReader(openedFile));
+	reader.Comment = '#'
+	reader.Comma = ','
+
+	var found bool
+	var foundOffset uint64
+	for {
+		line, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return 0, err
+		}
+
+		if (strings.TrimSpace(line[1]) == "app" || strings.TrimSpace(line[1]) == "0") && strings.TrimSpace(line[2]) == "ota_0" {
+			found = true;
+
+			foundOffset, err = strconv.ParseUint(strings.TrimSpace(line[3]), 0, 64)
+			if err != nil {
+				return 0, err
+			}
+
+			break;
+		}
+	}
+
+	if !found {
+		return 0, errors.New("offset for factory app is not found")
+	}
+
+	return uint(foundOffset), nil
+}
+
 func getIdfOnlyRecipes(projectName, projectDirectory string) ([]esp32fw.FirmwareRecipe, error) {
 	recipes := make([]esp32fw.FirmwareRecipe, 3)
 	partitionTableName, err := getPartitionTableName(projectDirectory)
@@ -47,19 +96,24 @@ func getIdfOnlyRecipes(projectName, projectDirectory string) ([]esp32fw.Firmware
 		return recipes, err
 	}
 
+	factoryAppOffset, err := getFactoryAppOffset(projectDirectory, partitionTableName)
+	if err != nil {
+		factoryAppOffset = 0x10000
+	}
+
 	recipes[0] = esp32fw.FirmwareRecipe{
 		Path:   filepath.Join(projectDirectory, "build/bootloader/bootloader.bin"),
 		Offset: 0x1000,
 	}
 
 	recipes[1] = esp32fw.FirmwareRecipe{
-		Path:   filepath.Join(projectDirectory, "build", partitionTableName),
+		Path:   filepath.Join(projectDirectory, "build", partitionTableName+".bin"),
 		Offset: 0x8000,
 	}
 
 	recipes[2] = esp32fw.FirmwareRecipe{
 		Path:   filepath.Join(projectDirectory, "build", projectName+".bin"),
-		Offset: 0x10000,
+		Offset: factoryAppOffset,
 	}
 
 	return recipes, nil
@@ -72,10 +126,17 @@ func getArduinoRecipes(projectName, arduinoDirectory, projectDirectory string) (
 	var partitionName string
 	_, err := os.Stat(defaultFilePath);
 	if err != nil {
-		partitionName = "partitions.bin"
-
+		partitionName, err = getPartitionTableName(projectDirectory)
+		if err != nil {
+			return recipes, err
+		}
 	} else {
-		partitionName = "default.bin"
+		partitionName = "default"
+	}
+
+	factoryAppOffset, err := getFactoryAppOffset(projectDirectory, partitionName)
+	if err != nil {
+		factoryAppOffset = 0x10000
 	}
 
 	recipes[0] = esp32fw.FirmwareRecipe{
@@ -84,7 +145,7 @@ func getArduinoRecipes(projectName, arduinoDirectory, projectDirectory string) (
 	}
 
 	recipes[1] = esp32fw.FirmwareRecipe{
-		Path:   filepath.Join(projectDirectory, "build", partitionName),
+		Path:   filepath.Join(projectDirectory, "build", partitionName+".bin"),
 		Offset: 0x8000,
 	}
 
@@ -95,7 +156,7 @@ func getArduinoRecipes(projectName, arduinoDirectory, projectDirectory string) (
 
 	recipes[3] = esp32fw.FirmwareRecipe{
 		Path:   filepath.Join(projectDirectory, "build", projectName+".bin"),
-		Offset: 0x10000,
+		Offset: factoryAppOffset,
 	}
 
 	return recipes, nil
